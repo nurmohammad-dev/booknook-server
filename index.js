@@ -27,6 +27,7 @@ const booksCollection = db.collection('books');
 
 app.post('/add-book', async(req, res) => {
     const data = req.body;
+   data.dateAdded = new Date();
     const result = await booksCollection.insertOne(data);
     console.log(result);
     res.send(result);
