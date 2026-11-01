@@ -39,14 +39,18 @@ app.post('/add-book', async(req, res) => {
 
 
 app.get('/books', async (req, res) => {
-  const result = await booksCollection
-  .find()
-  .sort({ dateAdded: -1 })
-    .limit(8)
-    .toArray();
-    console.log(result);
-    res.send(result);
-  });
+  const limit = Number(req.query.limit);
+
+  const cursor = booksCollection
+    .find()
+    .sort({ dateAdded: -1 });
+
+  if (limit) {
+    cursor.limit(limit);
+  }
+  const result = await cursor.toArray();
+  res.send(result);
+});
   
   
   const upload = multer({ storage: multer.memoryStorage() });
