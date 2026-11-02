@@ -98,6 +98,36 @@ app.get('/books/:id', async (req, res) => {
 
   res.send(result);
 });
+
+
+app.patch("/books/:id/borrow", async (req, res) => {
+  const id = req.params.id;
+
+  const result = await booksCollection.updateOne(
+    {
+      _id: new ObjectId(id),
+      copies: { $gt: 0 },
+    },
+    {
+      $inc: { copies: -1 },
+    }
+  );
+
+  if (result.matchedCount === 0) {
+    return res.status(400).send({
+      success: false,
+      message: "No copies available",
+    });
+  }
+
+  res.send({
+    success: true,
+    message: "Book borrowed successfully",
+  });
+});
+
+
+
   
   //http://localhost:8000/add-book
   app.listen(PORT, () => {
