@@ -1,17 +1,16 @@
-import express from 'express';
-import 'dotenv/config'
-import { MongoClient, ObjectId } from 'mongodb';
-import cors from 'cors';
+import express from "express";
+import "dotenv/config";
+import { MongoClient, ObjectId } from "mongodb";
+import cors from "cors";
 import multer from "multer";
-import { createRemoteJWKSet, jwtVerify } from 'jose';
+import { createRemoteJWKSet, jwtVerify } from "jose";
+
 
 
 const app = express();
 const PORT = 8000;
-app.use(cors());   
+app.use(cors());
 app.use(express.json());
-
-
 
 const client = new MongoClient(process.env.MONGODB_URI);
 
@@ -21,15 +20,16 @@ export async function connectToMongoDB() {
     console.log("You successfully connected to MongoDB!");
     return client;
   } catch (err) {
-    console.dir(err);
+    // console.dir(err);
+    console.error("MongoDB Connection Failed", err);
+    throw err;
   }
 }
 
 const mongoClient = await connectToMongoDB();
-const db = mongoClient.db('booknook');
-const booksCollection = db.collection('books');
-const borrowsCollection = db.collection('borrows');
-
+const db = mongoClient.db("booknook");
+const booksCollection = db.collection("books");
+const borrowsCollection = db.collection("borrows");
 
 const VerifyToken = async (req, res, next) => {
   const authHeader = req.headers.authorization;
@@ -40,28 +40,25 @@ const VerifyToken = async (req, res, next) => {
     });
   }
   const token = authHeader.split(" ")[1];
-  if(!token) {
+  if (!token) {
     return res.status(401).send({
       message: "Unauthorized access",
     });
   }
   const JWKS = createRemoteJWKSet(
-      new URL('http://localhost:3000/api/auth/jwks')   
+    new URL(`${process.env.CLIENT_URL}/api/auth/jwks`),
   );
-  try{
-    const {payload} = await jwtVerify(token, JWKS);
+  try {
+    const { payload } = await jwtVerify(token, JWKS);
     next();
-  }
-  catch(error){
+  } catch (error) {
     return res.status(401).send({
       mesg: "Token verification failed",
     });
   }
 };
 
-
-
-app.post('/books', VerifyToken, async (req, res) => {
+app.post("/books", VerifyToken, async (req, res) => {
   try {
     const data = req.body;
 
@@ -84,13 +81,10 @@ app.post('/books', VerifyToken, async (req, res) => {
   }
 });
 
-
-app.get('/books', async (req, res) => {
+app.get("/books", async (req, res) => {
   const limit = Number(req.query.limit);
 
-  const cursor = booksCollection
-    .find()
-    .sort({ dateAdded: -1 });
+  const cursor = booksCollection.find().sort({ dateAdded: -1 });
 
   if (limit) {
     cursor.limit(limit);
@@ -98,46 +92,45 @@ app.get('/books', async (req, res) => {
   const result = await cursor.toArray();
   res.send(result);
 });
-  
-  
-  const upload = multer({ storage: multer.memoryStorage() });
-  
-  app.post("/upload-image", VerifyToken, upload.single("image"), async (req, res) => {
-  try {
-    const formData = new FormData();
 
-    formData.append(
-      "image",
-      req.file.buffer.toString("base64")
-    );
+const upload = multer({ storage: multer.memoryStorage() });
 
-    const response = await fetch(
-      `https://api.imgbb.com/1/upload?key=${process.env.IMGBB_API_KEY}`,
-      {
-        method: "POST",
-        body: formData,
-      }
-    );
+app.post(
+  "/upload-image",
+  VerifyToken,
+  upload.single("image"),
+  async (req, res) => {
+    try {
+      const formData = new FormData();
 
-    const data = await response.json();
+      formData.append("image", req.file.buffer.toString("base64"));
 
-    res.send({
-      success: true,
-      imageUrl: data.data.url,
-    });
-  } catch (error) {
-    console.error(error);
+      const response = await fetch(
+        `https://api.imgbb.com/1/upload?key=${process.env.IMGBB_API_KEY}`,
+        {
+          method: "POST",
+          body: formData,
+        },
+      );
 
-    res.status(500).send({
-      success: false,
-      message: "Image upload failed",
-    });
-  }
-});
+      const data = await response.json();
 
+      res.send({
+        success: true,
+        imageUrl: data.data.url,
+      });
+    } catch (error) {
+      console.error(error);
 
+      res.status(500).send({
+        success: false,
+        message: "Image upload failed",
+      });
+    }
+  },
+);
 
-app.get('/books/:id', VerifyToken, async (req, res) => {
+app.get("/books/:id", VerifyToken, async (req, res) => {
   const id = req.params.id;
 
   const result = await booksCollection.findOne({
@@ -147,21 +140,12 @@ app.get('/books/:id', VerifyToken, async (req, res) => {
   res.send(result);
 });
 
-
-
 // Update book
 app.patch("/books/:id", VerifyToken, async (req, res) => {
   try {
     const id = req.params.id;
 
-    const {
-      title,
-      author,
-      category,
-      copies,
-      description,
-      image,
-    } = req.body;
+    const { title, author, category, copies, description, image } = req.body;
 
     const result = await booksCollection.updateOne(
       {
@@ -176,7 +160,7 @@ app.patch("/books/:id", VerifyToken, async (req, res) => {
           description,
           image,
         },
-      }
+      },
     );
 
     if (result.matchedCount === 0) {
@@ -200,7 +184,6 @@ app.patch("/books/:id", VerifyToken, async (req, res) => {
     });
   }
 });
-
 
 // Delete book
 app.delete("/books/:id", VerifyToken, async (req, res) => {
@@ -233,14 +216,10 @@ app.delete("/books/:id", VerifyToken, async (req, res) => {
   }
 });
 
-
 // Create borrow
 app.post("/borrows", VerifyToken, async (req, res) => {
   try {
-    const {
-      bookId,
-      userEmail,
-    } = req.body;
+    const { bookId, userEmail } = req.body;
 
     if (!bookId || !userEmail) {
       return res.status(400).send({
@@ -295,7 +274,7 @@ app.post("/borrows", VerifyToken, async (req, res) => {
       },
       {
         $inc: { copies: -1 },
-      }
+      },
     );
 
     if (updateResult.modifiedCount === 0) {
@@ -332,7 +311,6 @@ app.post("/borrows", VerifyToken, async (req, res) => {
   }
 });
 
-
 // Get user's borrowed books
 app.get("/borrows", VerifyToken, async (req, res) => {
   try {
@@ -361,7 +339,6 @@ app.get("/borrows", VerifyToken, async (req, res) => {
   }
 });
 
-
 // Return book
 app.delete("/borrows/:id", VerifyToken, async (req, res) => {
   try {
@@ -385,7 +362,7 @@ app.delete("/borrows/:id", VerifyToken, async (req, res) => {
       },
       {
         $inc: { copies: 1 },
-      }
+      },
     );
 
     // Remove borrow record
@@ -408,8 +385,7 @@ app.delete("/borrows/:id", VerifyToken, async (req, res) => {
   }
 });
 
-  // VerifyToken middleware
-  //http://localhost:8000/
-  app.listen(PORT, () => {
-    console.log(`Server is running at ${PORT}`);
-})
+//http://localhost:8000/
+app.listen(PORT, () => {
+  console.log(`Server is running at ${PORT}`);
+});
