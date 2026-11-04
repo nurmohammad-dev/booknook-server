@@ -12,6 +12,17 @@ const PORT = 8000;
 app.use(cors());
 app.use(express.json());
 
+
+app.get("/", (req, res) => {
+  res.send({
+    success: true,
+    message: "Welcome to BookNook API!",
+    status: "Server is running",
+  });
+});
+
+
+
 const client = new MongoClient(process.env.MONGODB_URI);
 
 export async function connectToMongoDB() {
@@ -30,6 +41,8 @@ const mongoClient = await connectToMongoDB();
 const db = mongoClient.db("booknook");
 const booksCollection = db.collection("books");
 const borrowsCollection = db.collection("borrows");
+
+
 
 const VerifyToken = async (req, res, next) => {
   const authHeader = req.headers.authorization;
@@ -389,3 +402,5 @@ app.delete("/borrows/:id", VerifyToken, async (req, res) => {
 app.listen(PORT, () => {
   console.log(`Server is running at ${PORT}`);
 });
+
+export default app;
