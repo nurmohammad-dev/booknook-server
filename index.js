@@ -3,12 +3,14 @@ import 'dotenv/config'
 import { MongoClient, ObjectId } from 'mongodb';
 import cors from 'cors';
 import multer from "multer";
+import { createRemoteJWKSet, jwtVerify } from 'jose';
 
 
 const app = express();
 const PORT = 8000;
 app.use(cors());   
 app.use(express.json());
+
 
 
 const client = new MongoClient(process.env.MONGODB_URI);
@@ -29,13 +31,57 @@ const booksCollection = db.collection('books');
 const borrowsCollection = db.collection('borrows');
 
 
+const VerifyToken = async (req, res, next) => {
+  const authHeader = req.headers.authorization;
 
-app.post('/add-book', async(req, res) => {
-  const data = req.body;
-  data.dateAdded = new Date();
-  const result = await booksCollection.insertOne(data);
-  console.log(result);
-  res.send(result);
+  if (!authHeader) {
+    return res.status(401).send({
+      message: "Unauthorized access",
+    });
+  }
+  const token = authHeader.split(" ")[1];
+  if(!token) {
+    return res.status(401).send({
+      message: "Unauthorized access",
+    });
+  }
+  const JWKS = createRemoteJWKSet(
+      new URL('http://localhost:3000/api/auth/jwks')   
+  );
+  try{
+    const {payload} = await jwtVerify(token, JWKS);
+    next();
+  }
+  catch(error){
+    return res.status(401).send({
+      mesg: "Token verification failed",
+    });
+  }
+};
+
+
+
+app.post('/books', VerifyToken, async (req, res) => {
+  try {
+    const data = req.body;
+
+    data.dateAdded = new Date();
+
+    const result = await booksCollection.insertOne(data);
+
+    res.send({
+      success: true,
+      message: "Book added successfully",
+      result,
+    });
+  } catch (error) {
+    console.error(error);
+
+    res.status(500).send({
+      success: false,
+      message: "Failed to add book",
+    });
+  }
 });
 
 
@@ -56,7 +102,7 @@ app.get('/books', async (req, res) => {
   
   const upload = multer({ storage: multer.memoryStorage() });
   
-  app.post("/upload-image", upload.single("image"), async (req, res) => {
+  app.post("/upload-image", VerifyToken, upload.single("image"), async (req, res) => {
   try {
     const formData = new FormData();
 
@@ -90,7 +136,8 @@ app.get('/books', async (req, res) => {
 });
 
 
-app.get('/books/:id', async (req, res) => {
+
+app.get('/books/:id', VerifyToken, async (req, res) => {
   const id = req.params.id;
 
   const result = await booksCollection.findOne({
@@ -103,7 +150,7 @@ app.get('/books/:id', async (req, res) => {
 
 
 // Update book
-app.patch("/books/:id", async (req, res) => {
+app.patch("/books/:id", VerifyToken, async (req, res) => {
   try {
     const id = req.params.id;
 
@@ -156,7 +203,7 @@ app.patch("/books/:id", async (req, res) => {
 
 
 // Delete book
-app.delete("/books/:id", async (req, res) => {
+app.delete("/books/:id", VerifyToken, async (req, res) => {
   try {
     const id = req.params.id;
 
@@ -187,15 +234,8 @@ app.delete("/books/:id", async (req, res) => {
 });
 
 
-
-
-
-
-
-
-
 // Create borrow
-app.post("/borrows", async (req, res) => {
+app.post("/borrows", VerifyToken, async (req, res) => {
   try {
     const {
       bookId,
@@ -294,7 +334,7 @@ app.post("/borrows", async (req, res) => {
 
 
 // Get user's borrowed books
-app.get("/borrows", async (req, res) => {
+app.get("/borrows", VerifyToken, async (req, res) => {
   try {
     const userEmail = req.query.email;
 
@@ -323,7 +363,7 @@ app.get("/borrows", async (req, res) => {
 
 
 // Return book
-app.delete("/borrows/:id", async (req, res) => {
+app.delete("/borrows/:id", VerifyToken, async (req, res) => {
   try {
     const id = req.params.id;
 
@@ -368,8 +408,8 @@ app.delete("/borrows/:id", async (req, res) => {
   }
 });
 
-  
-  //http://localhost:8000/add-book
+  // VerifyToken middleware
+  //http://localhost:8000/
   app.listen(PORT, () => {
     console.log(`Server is running at ${PORT}`);
 })
